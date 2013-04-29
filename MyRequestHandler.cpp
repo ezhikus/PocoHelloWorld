@@ -3,39 +3,46 @@
 #include <string>
 
 #include "MyRequestHandler.h"
+#include <Poco/Net/HTTPServerRequest.h>
+#include <Poco/Net/HTTPRequestHandler.h>
 #include <Poco/Net/HTTPServerResponse.h>
-#include <Poco/Net/HTMLForm.h>
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/HTTPRequestHandlerFactory.h>
-#include <Poco/Mutex.h>
 #include <Poco/ScopedLock.h>
 #include <Poco/URI.h>
 #include <Poco/StringTokenizer.h>
 
+using namespace Poco::Net;
+
 string MyServerApp::text = "Hello world!";
+Mutex MyServerApp::textLock;
 
-void CMyRequestHandler::handleRequest(HTTPServerRequest &req, HTTPServerResponse &resp)
+class CMyRequestHandler : public HTTPRequestHandler
 {
-	resp.setStatus(HTTPResponse::HTTP_OK);
-	resp.setContentType("text/html");
-	ostream& out = resp.send();
-
-	URI uri(req.getURI());
-	if (uri.toString().find("/setText") == 0)
+public:
+	void handleRequest(HTTPServerRequest &req, HTTPServerResponse &resp)
 	{
-		StringTokenizer str(uri.getQuery(), "=");
-		if (str.count() == 2 && str[0] == "text")
-		{
-			MyServerApp::setText(str[1]);
-			out << "ok";
-			out.flush();
-			return;
-		}
-	}
+		resp.setStatus(HTTPResponse::HTTP_OK);
+		resp.setContentType("text/html");
+		ostream& out = resp.send();
 
-	out << "error";
-	out.flush();
-}
+		URI uri(req.getURI());
+		if (uri.toString().find("/setText") == 0)
+		{
+			StringTokenizer str(uri.getQuery(), "=");
+			if (str.count() == 2 && str[0] == "text")
+			{
+				MyServerApp::setText(str[1]);
+				out << "ok";
+				out.flush();
+				return;
+			}
+		}
+
+		out << "error";
+		out.flush();
+	}
+};
 
 class MyRequestHandlerFactory : public HTTPRequestHandlerFactory
 {
@@ -48,9 +55,14 @@ public:
 
 void MyServerApp::setText(string newText)
 {
-	Mutex textLock;
 	ScopedLock<Mutex> lock(textLock);
 	text = newText;
+}
+
+string MyServerApp::getText() 
+{ 
+	ScopedLock<Mutex> lock(textLock);
+	return text; 
 }
 
 int MyServerApp::main(const vector<string> &)
